@@ -778,12 +778,49 @@ export function downloadClipLoop(list, apiDownload, tileLayer, downloadGeometry,
 }
 
 export async function downloadImage(tile, downloadOption) {
-  const { clipImage } = downloadOption;
+  const { clipImage, isVectorGeojson } = downloadOption;
+  if (isVectorGeojson) {
+    return _downloadVectorGeojson(tile, downloadOption);
+  }
   if (clipImage) {
     return _downloadClipImage(tile, downloadOption);
   } else {
     return _downloadImage(tile, downloadOption);
   }
+}
+
+async function _downloadVectorGeojson(tile, downloadOption) {
+  const { jobId } = downloadOption;
+  const param = {
+    jobId,
+    url: tile.url,
+    tile: {
+      x: tile.x,
+      y: tile.y,
+      z: tile.z !== undefined ? tile.z : (tile.zoom !== undefined ? tile.zoom : 0),
+    },
+    timeout: 30000,
+  };
+
+  const maxRetries = 3;
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    attempt++;
+    try {
+      const result = await window.electron.ipcRenderer.invoke('save-tdt-geojson-tile', param);
+      if (result && result.success) {
+        console.log(`[TDT-Vector] ✅ 瓦片成功: z=${param.tile.z}, x=${param.tile.x}, y=${param.tile.y} (第${attempt}次尝试)`);
+        return true;
+      }
+      console.warn(`[TDT-Vector] ⚠️ 瓦片失败: z=${param.tile.z}, x=${param.tile.x}, y=${param.tile.y} (第${attempt}次尝试):`, result?.error || '未知错误');
+    } catch (error) {
+      console.error(`[TDT-Vector] ❌ 瓦片异常: z=${param.tile.z}, x=${param.tile.x}, y=${param.tile.y} (第${attempt}次尝试):`, error);
+    }
+    if (attempt < maxRetries && !downloadController.cancelled) {
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+  return false;
 }
 
 async function _downloadImage(tile, downloadOption) {

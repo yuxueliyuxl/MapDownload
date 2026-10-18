@@ -49,7 +49,9 @@ const buildByConfig = (configFile) => build({configFile, mode});
       // 主包构建后，额外构建独立 downloadWorker 文件（dist 会被 vite emptyOutDir 清空，必须在 vite 构建之后生成）
       if (packageConfigPath === 'packages/main/vite.config.js') {
         await buildDownloadWorker();
-        console.log('[downloadWorker] bundled successfully');
+        const fse = require('fs-extra');
+        await fse.copy('packages/main/src/tianditu', 'packages/main/dist/tianditu');
+        console.log('[downloadWorker & tianditu] bundled and copied successfully');
       }
 
       console.timeEnd('Bundling time');

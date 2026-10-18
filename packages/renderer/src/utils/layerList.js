@@ -309,8 +309,29 @@ const mapList = [
           attribution: '天地图-地形图',
         },
       },
+      {
+        label: '矢量底图(导出GeoJSON)',
+        value: 'Vector_Base',
+        prejection: 'EPSG:3857',
+        isVectorGeojson: true,
+        exteral: {
+          subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+          attribution: '天地图-矢量底图',
+        },
+      },
+      {
+        label: '矢量注记(导出GeoJSON)',
+        value: 'Vector_Label',
+        prejection: 'EPSG:3857',
+        isVectorGeojson: true,
+        exteral: {
+          subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+          attribution: '天地图-矢量注记',
+        },
+      },
     ],
   },
+
   {
     label: 'Mapbox',
     value: 'Mapbox',

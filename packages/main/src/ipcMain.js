@@ -5,8 +5,9 @@ const fse = require('fs-extra');
 const fs = require('fs');
 const sharp = require('sharp');
 const request = require('superagent');
-const path = require('path');
 import { getHeader } from './ipHandle';
+const { parseTileToGeoJSON, geoJsonExporter } = require('./tianditu');
+
 
 // Worker 管理器实例
 let downloadWorker = null;
@@ -458,4 +459,87 @@ export function ipcHandle(_win) {
     return await saveImageMergeSingleThread(args);
   });
 
+  // ==================== 天地图矢量瓦片转 GeoJSON 下载 IPC ====================
+
+  ipcMain.handle('start-tdt-geojson-job', async (event, { jobId, saveDir, vectorType }) => {
+    try {
+      return await geoJsonExporter.startJob(jobId, saveDir, vectorType);
+    } catch (err) {
+      console.error('[IPC Main] start-tdt-geojson-job 失败:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('save-tdt-geojson-tile', async (event, args) => {
+    const { jobId, url, tile, timeout = 30000 } = args;
+
+    // 1. 尝试使用 Worker 多线程并发下载并解析
+    if (workerEnabled && workerAvailable && TaskType && TaskType.TDT_GEOJSON) {
+      try {
+        const worker = await getDownloadWorker();
+        if (worker) {
+          const customTaskId = `tdt-geojson-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          const resultPromise = new Promise((resolve) => {
+            workerTaskResolvers.set(customTaskId, resolve);
+            worker.addTask({
+              customTaskId,
+              url,
+              tile,
+              type: TaskType.TDT_GEOJSON,
+              timeout,
+            });
+          });
+
+          // 设置超时保护
+          setTimeout(() => {
+            const resolve = workerTaskResolvers.get(customTaskId);
+            if (resolve) {
+              workerTaskResolvers.delete(customTaskId);
+              resolve({ success: false, error: 'Task timeout' });
+            }
+          }, 120000);
+
+          const res = await resultPromise;
+          if (res && res.success && res.featuresByLayer) {
+            await geoJsonExporter.appendFeatures(jobId, res.featuresByLayer);
+            return { success: true };
+          }
+          return res || { success: false, error: 'Empty worker response' };
+        }
+      } catch (err) {
+        console.warn('[IPC Main] Worker 处理矢量瓦片失败，降级为单线程:', err.message);
+      }
+    }
+
+    // 2. 单线程降级
+    try {
+      const data = await fetchImageBuffer(url, timeout);
+      const featuresByLayer = await parseTileToGeoJSON(data, tile);
+      await geoJsonExporter.appendFeatures(jobId, featuresByLayer);
+      return { success: true };
+    } catch (err) {
+      console.error('[IPC Main] 矢量瓦片转 GeoJSON 失败:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('finish-tdt-geojson-job', async (event, { jobId }) => {
+    try {
+      return await geoJsonExporter.finishJob(jobId);
+    } catch (err) {
+      console.error('[IPC Main] finish-tdt-geojson-job 失败:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('cancel-tdt-geojson-job', async (event, { jobId }) => {
+    try {
+      await geoJsonExporter.cancelJob(jobId);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
 }
+

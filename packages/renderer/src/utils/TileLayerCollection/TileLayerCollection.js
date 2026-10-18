@@ -13,18 +13,21 @@ import Utils from './utils';
 class TileLayerCollection {
 
     static getTdtTileLayer(id, options = {}) {
+        const style = options.style || 'Normal';
+        if (style.startsWith('Vector_')) {
+            return new TdtTileLayer(id, { ...options, style });
+        }
+
         const baselayers = [];
-        const baseLayer = new TdtTileLayer(Utils.uuid(), options);
+        const baseLayer = new TdtTileLayer(Utils.uuid(), { ...options, style });
         baselayers.push(baseLayer);
 
-        if (options.style) {
-            options.style = options.style + '_Label';
-            const baseLayer1 = new TdtTileLayer(Utils.uuid(), options);
+        if (style) {
+            const baseLayer1 = new TdtTileLayer(Utils.uuid(), { ...options, style: style + '_Label' });
             baselayers.push(baseLayer1);
         }
 
         return new GroupTileLayer(id, baselayers, {attribution: options.attribution});
-
     }
 
     static getGeoqTileLayer(id, options = {}) {

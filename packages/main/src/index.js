@@ -70,6 +70,16 @@ const createWindow = async () => {
     }
   });
 
+  // 支持 F12 和 Ctrl+Shift+I 打开开发者工具控制台查看实时日志
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown') {
+      if (input.key === 'F12' || ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i')) {
+        mainWindow.webContents.toggleDevTools();
+        event.preventDefault();
+      }
+    }
+  });
+
   /**
    * URL for main window.
    * Vite dev server for development.

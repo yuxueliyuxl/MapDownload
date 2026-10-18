@@ -47,6 +47,8 @@ const TaskStatus = {
   CANCELLED: 'cancelled',
 };
 
+const { parseTileToGeoJSON } = require('./tianditu');
+
 /**
  * 任务类型枚举
  * @enum {string}
@@ -55,7 +57,9 @@ const TaskType = {
   DOWNLOAD: 'download',
   DOWNLOAD_WITH_MASK: 'download_with_mask',
   MERGE: 'merge',
+  TDT_GEOJSON: 'tdt_geojson',
 };
+
 
 /**
  * 工作线程消息类型
@@ -184,11 +188,13 @@ function runWorker() {
  * @returns {Promise<Object>} 执行结果
  */
 async function executeTask(data, taskId, workerId) {
-  const { type, url, savePath, imageBuffer, layers, timeout = 30000 } = data;
+  const { type, url, savePath, imageBuffer, layers, tile, timeout = 30000 } = data;
 
   // 确保目录存在
-  const dir = path.dirname(savePath);
-  await fse.ensureDir(dir);
+  if (savePath) {
+    const dir = path.dirname(savePath);
+    await fse.ensureDir(dir);
+  }
 
   switch (type) {
     case TaskType.DOWNLOAD:
@@ -200,10 +206,32 @@ async function executeTask(data, taskId, workerId) {
     case TaskType.MERGE:
       return downloadAndMergeImages(layers, savePath, imageBuffer, timeout, workerId);
 
+    case TaskType.TDT_GEOJSON:
+      return downloadAndParseTdtVector(url, tile, timeout, workerId);
+
     default:
       throw new Error(`Unknown task type: ${type}`);
   }
 }
+
+/**
+ * 下载天地图矢量切片并解析转码为 GeoJSON Features
+ * @param {string} url 切片地址
+ * @param {Object} tile 包含 x, y, z
+ * @param {number} timeout
+ * @param {number} workerId
+ */
+async function downloadAndParseTdtVector(url, tile, timeout, workerId) {
+  try {
+    const data = await fetchBuffer(url, timeout);
+    const featuresByLayer = await parseTileToGeoJSON(data, tile);
+    return { success: true, featuresByLayer, tile };
+  } catch (error) {
+    console.error(`[Worker ${workerId}] 下载解析天地图矢量瓦片失败 (${tile?.z}/${tile?.x}/${tile?.y}):`, error.message);
+    throw error;
+  }
+}
+
 
 /**
  * 非流式下载图片并返回 Buffer

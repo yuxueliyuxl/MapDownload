@@ -52,7 +52,16 @@ export default function getParams() {
       Terrain_Label: {
         url: getTdtUrl('https://t0.tianditu.gov.cn/cta_w/wmts', 'cta'),
       },
+
+      Vector_Base: {
+        url: 'https://tile0.tianditu.gov.cn/vts?t=vt&pk={pk}&tk=' + (tdtKey || 'b88bfb160c81dab8d9d20aaa74846360'),
+      },
+
+      Vector_Label: {
+        url: 'https://tile0.tianditu.gov.cn/vts?t=vt&pk={pk}&tk=' + (tdtKey || 'b88bfb160c81dab8d9d20aaa74846360'),
+      },
     },
+
     GEOQ: {
       Satellite: {
         url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',

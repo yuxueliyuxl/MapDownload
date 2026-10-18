@@ -90,11 +90,13 @@ const setupMainPackageWatcher = (viteDevServer) => {
     name: 'reload-app-on-main-package-change',
     configFile: 'packages/main/vite.config.js',
     async writeBundle() {
-      // vite 构建会清空 dist，必须在 electron 启动前重新生成独立 downloadWorker 文件
+      // vite 构建会清空 dist，必须在 electron 启动前重新生成独立 downloadWorker 文件并复制 tianditu 模块
       try {
         await buildDownloadWorker();
+        const fse = require('fs-extra');
+        await fse.copy('packages/main/src/tianditu', 'packages/main/dist/tianditu');
       } catch (e) {
-        logger.error(`Failed to build downloadWorker: ${e.message}`, { timestamp: true });
+        logger.error(`Failed to build downloadWorker/tianditu: ${e.message}`, { timestamp: true });
       }
 
       if (spawnProcess !== null) {

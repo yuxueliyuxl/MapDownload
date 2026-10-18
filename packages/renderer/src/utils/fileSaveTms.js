@@ -55,6 +55,31 @@ export class TileTMS {
       console.error('创建失败任务记录失败:', err);
     });
 
+    // 检查是否为天地图矢量 GeoJSON 任务
+    const isVectorGeojson = this.imageType === 'geojson' || (this.tileLayer && this.tileLayer.isVectorGeojson);
+    const vectorJobId = isVectorGeojson
+      ? `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      : null;
+
+    if (isVectorGeojson) {
+      try {
+        const startRes = await window.electron.ipcRenderer.invoke('start-tdt-geojson-job', {
+          jobId: vectorJobId,
+          saveDir: this.rootPath,
+        });
+        if (!startRes || !startRes.success) {
+          window.$message.error('启动 GeoJSON 导出任务失败: ' + (startRes?.error || '未知错误'));
+          setMapLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error('start-tdt-geojson-job 失败:', err);
+        window.$message.error('启动 GeoJSON 导出任务异常');
+        setMapLoading(false);
+        return;
+      }
+    }
+
     const downloadPath = this.rootPath + '/';
     const zmin = this.minZoom;
     const zmax = this.maxZoom + 1;
@@ -63,6 +88,8 @@ export class TileTMS {
       downloadPath,
       pictureType,
       imageType: this.imageType,
+      isVectorGeojson,
+      jobId: vectorJobId,
     };
     if (clipImage) {
       option.clipImage = clipImage;
@@ -124,13 +151,31 @@ export class TileTMS {
     clearCurrentFailedTaskId();
 
     if (downloadController.cancelled) {
+      if (isVectorGeojson && vectorJobId) {
+        await window.electron.ipcRenderer.invoke('cancel-tdt-geojson-job', { jobId: vectorJobId }).catch(() => {});
+      }
       window.$message.info('下载已取消');
     } else {
-      const avgSpeed = finalPerfStats ? finalPerfStats.avgSpeed || 0 : 0;
-      const elapsedTime = finalPerfStats ? finalPerfStats.elapsedTime || 0 : 0;
-      window.$message.success(
-        `瓦片数据下载完成。平均速度: ${avgSpeed} 瓦片/秒，耗时: ${elapsedTime} 秒`,
-      );
+      if (isVectorGeojson && vectorJobId) {
+        try {
+          const finishRes = await window.electron.ipcRenderer.invoke('finish-tdt-geojson-job', { jobId: vectorJobId });
+          if (finishRes && finishRes.success) {
+            window.$message.success(
+              `天地图矢量 GeoJSON 导出完成！共提取 ${finishRes.totalFeatures} 个要素，保存至 ${finishRes.exportedFiles} 个图层文件及汇总文件。`,
+            );
+          } else {
+            window.$message.error('矢量数据导出完成，但写入文件失败: ' + (finishRes?.error || '未知错误'));
+          }
+        } catch (err) {
+          console.error('finish-tdt-geojson-job error:', err);
+        }
+      } else {
+        const avgSpeed = finalPerfStats ? finalPerfStats.avgSpeed || 0 : 0;
+        const elapsedTime = finalPerfStats ? finalPerfStats.elapsedTime || 0 : 0;
+        window.$message.success(
+          `瓦片数据下载完成。平均速度: ${avgSpeed} 瓦片/秒，耗时: ${elapsedTime} 秒`,
+        );
+      }
     }
 
     notifyStatusChange({ downloading: false, queueStatus: null, failedCount: failedCount });

@@ -1,13 +1,18 @@
 // 地图
 import {TileTMS, TileTMSList, TileTMSListMerge} from './fileSaveTms';
 import TileBaidu from './fileSaveBaidu';
+import {TileTdtVector} from './fileSaveTdtVector';
 import { getState } from './progress';
 export default class FileSave{
   constructor(data) {
-    const projection = data.mapConfig.projection.code; // BAIDU,EPSG:4326,EPSG:3857
     if (getState()) {
       return window.$message.warning('下载任务执行中，请稍后..');
     }
+    if ((data.downloadTarget && data.downloadTarget.startsWith('tdt_vector')) || data.downloadCategory === 'tdt_vector' || data.imageType === 'geojson') {
+      new TileTdtVector(data);
+      return;
+    }
+    const projection = data.mapConfig?.projection?.code; // BAIDU,EPSG:4326,EPSG:3857
     if (projection === 'BAIDU') {
       this.downloadBaidu(data);
     } else {

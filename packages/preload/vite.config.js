@@ -1,9 +1,14 @@
-import {chrome} from '../../.electron-vendors.cache.json';
-import {join} from 'path';
-import {builtinModules} from 'module';
+const {readFileSync} = require('fs');
+const {join} = require('path');
+const {builtinModules} = require('module');
 
 const PACKAGE_ROOT = __dirname;
+const {chrome} = JSON.parse(readFileSync(join(PACKAGE_ROOT, '../../.electron-vendors.cache.json'), 'utf-8'));
 
+/**
+ * @type {import('vite').UserConfig}
+ * @see https://vitejs.dev/config/
+ */
 const config = {
   mode: process.env.MODE,
   root: PACKAGE_ROOT,
@@ -37,4 +42,4 @@ const config = {
   },
 };
 
-export default config;
+module.exports = config;

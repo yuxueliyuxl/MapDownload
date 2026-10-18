@@ -31,22 +31,84 @@
           {{ downloadExtent.ymax }}
         </n-descriptions-item>
       </n-descriptions>
+
+      <!-- 一级选项：下载内容 -->
       <div class="item">
-        <span class="label">最小层级：</span>
+        <span class="label">下载内容：</span>
+        <div class="value">
+          <n-select
+            v-model:value="downloadCategory"
+            :options="categoryOptions"
+            @update:value="handleCategoryChange"
+          />
+        </div>
+      </div>
+
+      <!-- 二级选项：当下载内容为天地图矢量切片时，显示矢量类型 -->
+      <div
+        v-if="isVectorDownload"
+        class="item"
+      >
+        <span class="label">矢量类型：</span>
+        <div class="value">
+          <n-select
+            v-model:value="vectorType"
+            :options="vectorTypeOptions"
+          />
+        </div>
+      </div>
+
+      <!-- 选择1（天地图矢量）时：只留一个层级参数 -->
+      <div
+        v-if="isVectorDownload"
+        class="item"
+      >
+        <span class="label">下载层级：</span>
         <input
-          v-model="minZoom"
+          v-model="vectorZoom"
           class="value"
           type="text"
+          placeholder="推荐 17 级（全量建筑与路网）"
         >
       </div>
-      <div class="item">
-        <span class="label">最大层级：</span>
-        <input
-          v-model="maxZoom"
-          class="value"
-          type="text"
+
+      <!-- 选择2（栅格切片）时：保留最小层级与最大层级两个参数 -->
+      <template v-else>
+        <div class="item">
+          <span class="label">最小层级：</span>
+          <input
+            v-model="minZoom"
+            class="value"
+            type="text"
+          >
+        </div>
+        <div class="item">
+          <span class="label">最大层级：</span>
+          <input
+            v-model="maxZoom"
+            class="value"
+            type="text"
+          >
+        </div>
+      </template>
+
+      <!-- 矢量下载说明提示 -->
+      <div
+        v-if="isVectorDownload"
+        class="vector-tip-box"
+      >
+        <n-alert
+          type="info"
+          :show-icon="true"
         >
+          <div><strong>天地图矢量单级提取 GeoJSON</strong></div>
+          <div style="font-size: 12px; margin-top: 2px; line-height: 1.5;">
+            矢量数据采用单级提取（默认推荐 17 级，包含全量建筑三维与路网），导出为 GeoJSON 后在 GIS 中可无级缩放，避免多层级造成要素重复。
+          </div>
+        </n-alert>
       </div>
+
+      <!-- 栅格专属选项：合并标注 -->
       <div
         v-if="showMerge"
         class="item"
@@ -65,7 +127,12 @@
           下载大量瓦片时，合并可能会造成卡死！
         </div>
       </div>
-      <div class="item">
+
+      <!-- 栅格专属选项：边界裁切 -->
+      <div
+        v-if="!isVectorDownload"
+        class="item"
+      >
         <span class="label">边界裁切：</span>
         <div class="value">
           <input
@@ -74,6 +141,7 @@
           >
         </div>
       </div>
+
       <div class="item">
         <span class="label">下载路径：</span>
         <div class="value">
@@ -88,12 +156,14 @@
           </button>
         </div>
       </div>
+
       <div class="item">
         <span class="label">瓦片格式：</span>
         <div class="value">
           <n-select
             v-model:value="imageType"
-            :options="imageTypeList"
+            :options="computedImageTypeList"
+            :disabled="isVectorDownload"
           />
         </div>
       </div>
@@ -149,11 +219,50 @@ export default defineComponent({
     return {
       showModal: false,
       savePath: '',
+      vectorZoom: '17', // 天地图矢量下载单级参数，默认17
       maxZoom: '8',
       minZoom: '5',
+      downloadCategory: 'tdt_vector', // 一级选项：tdt_vector | current_raster
+      categoryOptions: [
+        {
+          label: '1、天地图矢量切片',
+          value: 'tdt_vector',
+        },
+        {
+          label: '2、当前地图栅格切片',
+          value: 'current_raster',
+        },
+      ],
+      vectorType: 'all', // 二级选项：矢量的类型
+      vectorTypeOptions: [
+        {
+          label: '全部要素 (底图要素 + 注记标注)',
+          value: 'all',
+        },
+        {
+          label: '基础底图要素 (建筑/水系/绿地/地块/路网)',
+          value: 'base',
+        },
+        {
+          label: '建筑物要素 (仅建筑轮廓面与层高白模)',
+          value: 'building',
+        },
+        {
+          label: '水系与绿地要素 (水系面BM + 绿地面CK)',
+          value: 'water_green',
+        },
+        {
+          label: '道路路网要素 (交通道路与中心线)',
+          value: 'road',
+        },
+        {
+          label: '文字注记要素 (POI点位、地名路名标注)',
+          value: 'label',
+        },
+      ],
       mergeLayers: false,
       clipImage: false,
-      imageType: 'png',
+      imageType: 'geojson',
       imageTypeList: [
         {
           label: 'png',
@@ -171,23 +280,78 @@ export default defineComponent({
     };
   },
   computed: {
+    isVectorDownload() {
+      return this.downloadCategory === 'tdt_vector';
+    },
     showMerge() {
+      if (this.isVectorDownload) return false;
       return Array.isArray(this.baseLayer) && this.baseLayer.length > 1;
+    },
+    computedImageTypeList() {
+      if (this.isVectorDownload) {
+        return [
+          {
+            label: 'GeoJSON (*.geojson)',
+            value: 'geojson',
+          },
+        ];
+      }
+      return this.imageTypeList;
     },
   },
   watch: {
-    visible() {
-      this.showModal = this.visible;
+    visible(val) {
+      this.showModal = val;
+      if (val) {
+        if (this.checkCurrentIsVector()) {
+          this.downloadCategory = 'tdt_vector';
+        }
+        this.applyCategoryState();
+      }
     },
   },
   created() {
     this.showModal = this.visible;
+    if (this.checkCurrentIsVector()) {
+      this.downloadCategory = 'tdt_vector';
+    }
+    this.applyCategoryState();
   },
   mounted() {
   },
   methods: {
+    checkCurrentIsVector() {
+      if (Array.isArray(this.baseLayer)) {
+        return this.baseLayer.some(l => l && (l.isVectorGeojson || (l.config && l.config().style && l.config().style.startsWith('Vector_'))));
+      }
+      if (this.baseLayer) {
+        return !!(this.baseLayer.isVectorGeojson || (this.baseLayer.config && this.baseLayer.config().style && this.baseLayer.config().style.startsWith('Vector_')));
+      }
+      return false;
+    },
+    handleCategoryChange(val) {
+      this.downloadCategory = val;
+      this.applyCategoryState();
+    },
+    applyCategoryState() {
+      if (this.isVectorDownload) {
+        this.imageType = 'geojson';
+        this.clipImage = false;
+        this.mergeLayers = false;
+        if (!this.vectorZoom) {
+          this.vectorZoom = '17';
+        }
+      } else {
+        if (this.imageType === 'geojson') {
+          this.imageType = 'png';
+        }
+        if (!this.minZoom) this.minZoom = '5';
+        if (!this.maxZoom) this.maxZoom = '8';
+      }
+    },
     reset() {
       this.savePath = '';
+      this.vectorZoom = '17';
       this.maxZoom = '';
       this.minZoom = '';
     },
@@ -205,24 +369,46 @@ export default defineComponent({
       if (!this.savePath) {
         return window.$message.warning('请选择保存目录');
       }
-      if (!this.maxZoom) {
-        return window.$message.warning('请输入最大层级');
+
+      let minZoom, maxZoom;
+      if (this.isVectorDownload) {
+        if (!this.vectorZoom) {
+          return window.$message.warning('请输入下载层级');
+        }
+        const z = parseInt(Number(this.vectorZoom));
+        if (isNaN(z) || z < 1 || z > 18) {
+          return window.$message.warning('天地图矢量层级范围为 1~18 级（推荐 14~17 级）');
+        }
+        minZoom = z;
+        maxZoom = z;
+      } else {
+        if (!this.maxZoom) {
+          return window.$message.warning('请输入最大层级');
+        }
+        if (!this.minZoom) {
+          return window.$message.warning('请输入最小层级');
+        }
+        minZoom = parseInt(Number(this.minZoom));
+        maxZoom = parseInt(Number(this.maxZoom));
+        if (isNaN(minZoom) || isNaN(maxZoom)) {
+          return window.$message.warning('层级格式错误，请输入非负整数');
+        }
+        if (minZoom > maxZoom) {
+          return window.$message.warning('最小层级不能大于最大层级');
+        }
+        if (minZoom < this.limitMinZoom || maxZoom > this.limitMaxZoom) {
+          return window.$message.warning('层级格式错误');
+        }
       }
-      if (!this.minZoom) {
-        return window.$message.warning('请输入最小层级');
-      }
-      const minZoom = parseInt(Number(this.minZoom));
-      const maxZoom = parseInt(Number(this.maxZoom));
-      if (isNaN(minZoom) || isNaN(maxZoom)) {
-        return window.$message.warning('层级格式错误，请输入非负整数');
-      }
-      if (minZoom > maxZoom || minZoom < this.limitMinZoom || maxZoom > this.limitMaxZoom) {
-        return window.$message.warning('层级格式错误');
-      }
-      if (this.isBaidu && this.clipImage) {
+
+      if (this.isBaidu && this.clipImage && !this.isVectorDownload) {
         return window.$message.warning('百度瓦片暂不支持裁切，请取消裁切后重试');
       }
+
       const param = {
+        downloadCategory: this.downloadCategory,
+        downloadTarget: this.isVectorDownload ? 'tdt_vector' : 'current_base',
+        vectorType: this.vectorType,
         savePath: this.savePath,
         minZoom: minZoom,
         maxZoom: maxZoom,
@@ -243,7 +429,7 @@ export default defineComponent({
   width: 100%;
   padding: 8px 16px;
   .item{
-    margin: 3px 0;
+    margin: 4px 0;
   }
   .label{
     display: inline-block;
@@ -254,6 +440,9 @@ export default defineComponent({
     display: inline-block;
     width: 260px;
   }
+}
+.vector-tip-box{
+  margin: 6px 0 10px 0;
 }
 .descriptions{
   ::v-deep .n-descriptions-header{
